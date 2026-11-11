@@ -78,6 +78,18 @@ internal class PerScopeState
         return _hoistedNodesPerScope.Peek().OfType<HoistedDefaultInitializedLoopVariable>().ToArray();
     }
 
+    /// <summary>
+    /// Removes the ByRef write-backs hoisted so far in the current scope, for a statement that would otherwise skip or delay them,
+    /// e.g. a jump statement, after which a write-back would be unreachable.
+    /// </summary>
+    public IReadOnlyCollection<StatementSyntax> TakeWriteBacks()
+    {
+        var hoistedNodes = _hoistedNodesPerScope.Peek().HoistedNodes;
+        var writeBacks = hoistedNodes.OfType<AdditionalAssignment>().ToArray();
+        hoistedNodes.RemoveAll(n => n is AdditionalAssignment);
+        return writeBacks.Select(AdditionalAssignment.CreateAssignment).ToArray();
+    }
+
     private StatementSyntax[] GetPostStatements()
     {
         var scopeState = _hoistedNodesPerScope.Peek();

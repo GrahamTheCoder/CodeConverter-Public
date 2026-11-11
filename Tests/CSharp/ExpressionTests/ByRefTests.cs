@@ -995,4 +995,84 @@ internal partial class C
 }");
     }
 
+    [Fact]
+    public async Task WritesBackBeforeJumpingIssue896Async()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Imports System.Collections.Generic
+Public Class C
+    Public Property P As Integer
+
+    Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+
+    Function CreateException(ByRef v As Integer) As Exception
+        Return New Exception()
+    End Function
+
+    Function ReturnsWrittenBack() As Long
+        Return Inc(P)
+    End Function
+
+    Function ReturnsWithoutWriteBack() As Integer
+        Return Inc(New Integer)
+    End Function
+
+    Iterator Function YieldsWrittenBack() As IEnumerable(Of Integer)
+        Yield Inc(P)
+    End Function
+
+    Sub ThrowsWrittenBack()
+        Throw CreateException(P)
+    End Sub
+End Class", @"using System;
+using System.Collections.Generic;
+
+public partial class C
+{
+    public int P { get; set; }
+
+    public int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+
+    public Exception CreateException(ref int v)
+    {
+        return new Exception();
+    }
+
+    public long ReturnsWrittenBack()
+    {
+        int argv = P;
+        long ret = Inc(ref argv);
+        P = argv;
+        return ret;
+    }
+
+    public int ReturnsWithoutWriteBack()
+    {
+        int argv = new int();
+        return Inc(ref argv);
+    }
+
+    public IEnumerable<int> YieldsWrittenBack()
+    {
+        int argv = P;
+        var ret = Inc(ref argv);
+        P = argv;
+        yield return ret;
+    }
+
+    public void ThrowsWrittenBack()
+    {
+        int argv = P;
+        var ex = CreateException(ref argv);
+        P = argv;
+        throw ex;
+    }
+}");
+    }
 }

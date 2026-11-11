@@ -492,7 +492,8 @@ internal class MethodBodyExecutableStatementVisitor : VBasic.VisualBasicSyntaxVi
 
     public override async Task<SyntaxList<StatementSyntax>> VisitThrowStatement(VBSyntax.ThrowStatementSyntax node)
     {
-        return SingleStatement(SyntaxFactory.ThrowStatement(await node.Expression.AcceptAsync<ExpressionSyntax>(_expressionVisitor)));
+        var csExpression = await node.Expression.AcceptAsync<ExpressionSyntax>(_expressionVisitor);
+        return WithWriteBacksBeforeJump(node.Expression, csExpression, "ex", SyntaxFactory.ThrowStatement);
     }
 
     public override async Task<SyntaxList<StatementSyntax>> VisitReturnStatement(VBSyntax.ReturnStatementSyntax node)
@@ -502,7 +503,34 @@ internal class MethodBodyExecutableStatementVisitor : VBasic.VisualBasicSyntaxVi
 
         var csExpression = await node.Expression.AcceptAsync<ExpressionSyntax>(_expressionVisitor);
         csExpression = CommonConversions.TypeConversionAnalyzer.AddExplicitConversion(node.Expression, csExpression);
-        return SingleStatement(SyntaxFactory.ReturnStatement(csExpression));
+        return WithWriteBacksBeforeJump(node.Expression, csExpression, "ret", SyntaxFactory.ReturnStatement);
+    }
+
+    /// <summary>
+    /// VB copies a ByRef argument back to its property straight after the call, so it happens before the statement jumps away.
+    /// Write-backs are normally emitted after the converted statement, which here would be unreachable (or, for yield, delayed until the consumer resumes).
+    /// So when there are any, evaluate the expression into a local, write back, then jump with that local.
+    /// Without write-backs the single statement is kept.
+    /// </summary>
+    private SyntaxList<StatementSyntax> WithWriteBacksBeforeJump(VBSyntax.ExpressionSyntax vbExpression, ExpressionSyntax csExpression, string resultPrefix,
+        Func<ExpressionSyntax, StatementSyntax> createJump)
+    {
+        if (csExpression is null) return SingleStatement(createJump(null));
+        var writeBacks = _perScopeState.TakeWriteBacks();
+        if (!writeBacks.Any()) return SingleStatement(createJump(csExpression));
+
+        var result = _perScopeState.Hoist(new AdditionalDeclaration(resultPrefix, csExpression, GetResultTypeSyntax(vbExpression)));
+        return SyntaxFactory.List(writeBacks.Append(createJump(result.IdentifierName)));
+    }
+
+    /// <summary>
+    /// <c>var</c> is only safe when the expression's own type is the one the jump needs: e.g. Nothing or a lambda has no natural type in C#.
+    /// </summary>
+    private TypeSyntax GetResultTypeSyntax(VBSyntax.ExpressionSyntax vbExpression)
+    {
+        var typeInfo = _semanticModel.GetTypeInfo(vbExpression);
+        var isNaturalType = typeInfo.Type is { } type && SymbolEqualityComparer.Default.Equals(type, typeInfo.ConvertedType);
+        return CommonConversions.GetTypeSyntax(typeInfo.ConvertedType, useImplicitType: isNaturalType);
     }
 
     public override async Task<SyntaxList<StatementSyntax>> VisitContinueStatement(VBSyntax.ContinueStatementSyntax node)
@@ -513,7 +541,8 @@ internal class MethodBodyExecutableStatementVisitor : VBasic.VisualBasicSyntaxVi
 
     public override async Task<SyntaxList<StatementSyntax>> VisitYieldStatement(VBSyntax.YieldStatementSyntax node)
     {
-        return SingleStatement(SyntaxFactory.YieldStatement(SyntaxKind.YieldReturnStatement, await node.Expression.AcceptAsync<ExpressionSyntax>(_expressionVisitor)));
+        var csExpression = await node.Expression.AcceptAsync<ExpressionSyntax>(_expressionVisitor);
+        return WithWriteBacksBeforeJump(node.Expression, csExpression, "ret", e => SyntaxFactory.YieldStatement(SyntaxKind.YieldReturnStatement, e));
     }
 
     public override async Task<SyntaxList<StatementSyntax>> VisitExitStatement(VBSyntax.ExitStatementSyntax node)
