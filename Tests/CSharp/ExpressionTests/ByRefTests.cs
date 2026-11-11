@@ -1075,4 +1075,142 @@ public partial class C
     }
 }");
     }
+
+    [Fact]
+    public async Task WritesBackBeforeBlockBodyAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+
+    Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+
+    Function Arr(ByRef v As Integer) As Integer()
+        Return New Integer() {v}
+    End Function
+
+    Function D(ByRef v As Integer) As IDisposable
+        Return Nothing
+    End Function
+
+    Function IsOne(ByRef v As Integer) As Boolean
+        Return v = 1
+    End Function
+
+    Sub BlockHeaders()
+        Select Case Inc(P)
+            Case 1
+                Console.WriteLine(1)
+        End Select
+        For i = 0 To Inc(P)
+            Console.WriteLine(i)
+        Next
+        For Each item In Arr(P)
+            Console.WriteLine(item)
+        Next
+        Using dd = D(P)
+            Console.WriteLine(3)
+        End Using
+        SyncLock Arr(P)
+            Console.WriteLine(4)
+        End SyncLock
+        With Arr(P)
+            Console.WriteLine(.Length)
+        End With
+        Try
+        Catch ex As Exception When IsOne(P)
+        End Try
+    End Sub
+
+    Sub BlockHeaderWithoutWriteBack()
+        Select Case Inc(New Integer)
+            Case 1
+                Console.WriteLine(1)
+        End Select
+    End Sub
+End Class", @"using System;
+
+public partial class C
+{
+    public int P { get; set; }
+
+    public int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+
+    public int[] Arr(ref int v)
+    {
+        return new int[] { v };
+    }
+
+    public IDisposable D(ref int v)
+    {
+        return null;
+    }
+
+    public bool IsOne(ref int v)
+    {
+        return v == 1;
+    }
+
+    public void BlockHeaders()
+    {
+        int localInc() { int argv = P; var ret = Inc(ref argv); P = argv; return ret; }
+
+        switch (localInc())
+        {
+            case 1:
+                Console.WriteLine(1);
+                break;
+        }
+        int localInc1() { int argv1 = P; var ret = Inc(ref argv1); P = argv1; return ret; }
+
+        for (int i = 0, loopTo = localInc1(); i <= loopTo; i++)
+            Console.WriteLine(i);
+        int[] localArr() { int argv2 = P; var ret = Arr(ref argv2); P = argv2; return ret; }
+
+        foreach (var item in localArr())
+            Console.WriteLine(item);
+        IDisposable localD() { int argv3 = P; var ret = D(ref argv3); P = argv3; return ret; }
+
+        using (var dd = localD())
+        {
+            Console.WriteLine(3);
+        }
+        int[] localArr1() { int argv4 = P; var ret = Arr(ref argv4); P = argv4; return ret; }
+
+        lock (localArr1())
+            Console.WriteLine(4);
+        int[] localArr2() { int argv5 = P; var ret = Arr(ref argv5); P = argv5; return ret; }
+
+        {
+            var withBlock = localArr2();
+            Console.WriteLine(withBlock.Length);
+        }
+        bool localIsOne() { int argv6 = P; var ret = IsOne(ref argv6); P = argv6; return ret; }
+
+        try
+        {
+        }
+        catch (Exception ex) when (localIsOne())
+        {
+        }
+    }
+
+    public void BlockHeaderWithoutWriteBack()
+    {
+        int argv = new int();
+        switch (Inc(ref argv))
+        {
+            case 1:
+                Console.WriteLine(1);
+                break;
+        }
+    }
+}");
+    }
 }

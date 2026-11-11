@@ -610,7 +610,9 @@ internal class NameExpressionNodeVisitor
     }
 
     /// <summary>
-    /// Conservative version of _semanticModel.AnalyzeControlFlow(invocation).ExitPoints to account for exceptions
+    /// Conservative version of _semanticModel.AnalyzeControlFlow(invocation).ExitPoints to account for exceptions.
+    /// A block's header statement is followed by its body, so a write-back placed after the converted block would run too late
+    /// (or, for a later Case clause, run when the clause was never evaluated).
     /// </summary>
     private static bool NextStatementDefinitelyExecutedAfter(VBSyntax.InvocationExpressionSyntax invocation)
     {
@@ -626,6 +628,14 @@ internal class NameExpressionNodeVisitor
                 case VBSyntax.IfStatementSyntax _:
                 case VBSyntax.ElseIfStatementSyntax _:
                 case VBSyntax.SingleLineIfStatementSyntax _:
+                case VBSyntax.SelectStatementSyntax _:
+                case VBSyntax.CaseStatementSyntax _:
+                case VBSyntax.ForStatementSyntax _:
+                case VBSyntax.ForEachStatementSyntax _:
+                case VBSyntax.UsingStatementSyntax _:
+                case VBSyntax.SyncLockStatementSyntax _:
+                case VBSyntax.WithStatementSyntax _:
+                case VBSyntax.CatchStatementSyntax _:
                     return false;
                 case VBSyntax.ExpressionSyntax _:
                 case VBSyntax.StatementSyntax _:

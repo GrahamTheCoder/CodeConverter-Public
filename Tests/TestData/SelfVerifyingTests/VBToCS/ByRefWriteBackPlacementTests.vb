@@ -111,6 +111,143 @@ Public Class ByRefWriteBackPlacementTests
     End Function
 
     <Fact>
+    Public Sub SelectCaseBodySeesWrittenBackValue()
+        Dim probe As New Probe
+        Select Case Increment(probe.Value)
+            Case 1
+                Assert.Equal(1, probe.Stored)
+            Case Else
+                Assert.Fail("Unexpected case")
+        End Select
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    <Fact>
+    Public Sub CaseClauseWritesBackBeforeItsBody()
+        Dim probe As New Probe
+        Dim x = 1
+        Select Case x
+            Case Increment(probe.Value)
+                Assert.Equal(1, probe.Stored)
+            Case Else
+                Assert.Fail("Unexpected case")
+        End Select
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    <Fact>
+    Public Sub ForBoundWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        Dim iterations = 0
+        For i = 0 To Increment(probe.Value)
+            iterations += 1
+            Assert.Equal(1, probe.Stored)
+        Next
+        Assert.Equal(2, iterations)
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    <Fact>
+    Public Sub ForEachCollectionWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        For Each item In New Integer() {Increment(probe.Value)}
+            Assert.Equal(1, probe.Stored)
+        Next
+        For Each item In Repeat(probe.Value)
+            Assert.Equal(2, probe.Stored)
+        Next
+        Assert.Equal(2, probe.Stored)
+    End Sub
+
+    Private Shared Function Repeat(ByRef value As Integer) As Integer()
+        value += 1
+        Return New Integer() {value}
+    End Function
+
+    <Fact>
+    Public Sub UsingResourceWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        Using d = CreateDisposable(probe.Value)
+            Assert.Equal(1, probe.Stored)
+        End Using
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    Private Shared Function CreateDisposable(ByRef value As Integer) As IDisposable
+        value += 1
+        Return New IO.MemoryStream()
+    End Function
+
+    <Fact>
+    Public Sub SyncLockWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        SyncLock CreateLock(probe.Value)
+            Assert.Equal(1, probe.Stored)
+        End SyncLock
+    End Sub
+
+    Private Shared Function CreateLock(ByRef value As Integer) As Object
+        value += 1
+        Return New Object()
+    End Function
+
+    <Fact>
+    Public Sub WithWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        With CreateLock(probe.Value)
+            Assert.Equal(1, probe.Stored)
+        End With
+    End Sub
+
+    <Fact>
+    Public Sub ForStartWritesBackBeforeTheBody()
+        Dim probe As New Probe
+        For i = Increment(probe.Value) To 1
+            Assert.Equal(1, probe.Stored)
+        Next
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    <Fact>
+    Public Sub CatchFilterWritesBackBeforeTheHandler()
+        Dim probe As New Probe
+        Try
+            Throw New InvalidOperationException()
+        Catch ex As InvalidOperationException When IncrementIsOne(probe.Value)
+            Assert.Equal(1, probe.Stored)
+        End Try
+        Assert.Equal("get,set", probe.LogText)
+    End Sub
+
+    Private Shared Function IncrementIsOne(ByRef value As Integer) As Boolean
+        Return Increment(value) = 1
+    End Function
+
+    <Fact>
+    Public Sub LaterCaseClauseIsOnlyEvaluatedWhenReached()
+        Dim probe As New Probe
+        Select Case 1
+            Case 1
+                Assert.Equal(0, probe.Stored)
+            Case Increment(probe.Value)
+                Assert.Fail("Unexpected case")
+        End Select
+        Assert.Equal("", probe.LogText)
+    End Sub
+
+    <Fact>
+    Public Sub NestedBlockHeadersWriteBackBeforeTheirBodies()
+        Dim probe As New Probe
+        For Each item In Repeat(probe.Value)
+            Select Case Increment(probe.Value)
+                Case 2
+                    Assert.Equal(2, probe.Stored)
+            End Select
+        Next
+        Assert.Equal(2, probe.Stored)
+    End Sub
+
+    <Fact>
     Public Sub UnchangedStatementShapesStillWriteBack()
         Dim probe As New Probe
         Increment(probe.Value)
