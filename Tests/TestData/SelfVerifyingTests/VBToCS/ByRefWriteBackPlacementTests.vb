@@ -257,6 +257,63 @@ Public Class ByRefWriteBackPlacementTests
         Assert.Equal(3, probe.Stored)
     End Sub
 
+    <Fact>
+    Public Sub InstanceFieldInitializerWithOmittedOptionalByRefIssue1081()
+        Dim initialized As New FieldInitializers
+        Assert.Same(initialized.First, initialized.Second.ReceivedInner)
+        Assert.Equal("", initialized.Second.ReceivedX)
+    End Sub
+
+    <Fact>
+    Public Sub InstanceFieldInitializersWriteBackInDeclarationOrder()
+        Dim initialized As New FieldInitializers
+        Assert.Equal(1, initialized.A)
+        Assert.Equal(22, initialized.C)
+        Assert.Equal(2, initialized.Counter)
+    End Sub
+
+    <Fact>
+    Public Sub EachVariableOfAFieldDeclarationGetsItsOwnTemporary()
+        Dim initialized As New FieldInitializers
+        Assert.NotSame(initialized.D, initialized.E)
+        Assert.Same(initialized.First, initialized.D.ReceivedInner)
+        Assert.Same(initialized.First, initialized.E.ReceivedInner)
+    End Sub
+
+    <Fact>
+    Public Sub SharedFieldInitializerWritesBack()
+        Assert.Equal(1, SharedFieldInitializer.B)
+        Assert.Equal(1, SharedFieldInitializer.SharedCounter)
+    End Sub
+
+    Private Class FieldInitializers
+        Public Property Counter As Integer
+        Public ReadOnly First As New Inner()
+        Public ReadOnly Second As New Outer(First)
+        Public ReadOnly A As Integer = Increment(Counter)
+        Public ReadOnly C As Integer = Increment(Counter) + Counter * 10
+        Public ReadOnly D, E As New Outer(First)
+    End Class
+
+    Private Class SharedFieldInitializer
+        Public Shared Property SharedCounter As Integer
+        Public Shared ReadOnly B As Integer = Increment(SharedCounter)
+    End Class
+
+    Private Class Inner
+    End Class
+
+    Private Class Outer
+        Public ReadOnly ReceivedInner As Inner
+        Public ReadOnly ReceivedX As String
+
+        Sub New(inner As Inner, Optional ByRef x As String = "")
+            ReceivedInner = inner
+            ReceivedX = x
+            x = "changed"
+        End Sub
+    End Class
+
     Private Shared Function Increment(ByRef value As Integer) As Integer
         value += 1
         Return value

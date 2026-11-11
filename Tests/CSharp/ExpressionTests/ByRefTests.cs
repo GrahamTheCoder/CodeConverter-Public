@@ -1213,4 +1213,99 @@ public partial class C
     }
 }");
     }
+
+    [Fact]
+    public async Task OmittedOptionalRefInInstanceFieldInitializerIssue1081Async()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class FieldInitializationTest
+    Private First As New Inner()
+    Private Second As New Outer(First)
+End Class
+
+Public Class Inner
+End Class
+
+Public Class Outer
+    Sub New(inner As Inner, Optional ByRef x As String = """")
+    End Sub
+End Class", @"using System.Runtime.InteropServices;
+
+public partial class FieldInitializationTest
+{
+    private Inner First = new Inner();
+
+    public FieldInitializationTest()
+    {
+        Second = initSecond();
+    }
+    Outer initSecond()
+    {
+        string argx = """";
+        return new Outer(First, x: ref argx);
+    }
+
+    private Outer Second;
+}
+
+public partial class Inner
+{
+}
+
+public partial class Outer
+{
+    public Outer(Inner inner, [Optional, DefaultParameterValue("""")] ref string x)
+    {
+    }
+}");
+    }
+
+    [Fact]
+    public async Task FieldInitializersWriteBackAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+    Private Shared Property SP As Integer
+    Private _a As Integer = Inc(P)
+    Private Shared _c As Integer = Inc(SP)
+
+    Shared Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+End Class", @"
+public partial class C
+{
+    public int P { get; set; }
+    private static int SP { get; set; }
+
+    public C()
+    {
+        _a = Inc__a();
+    }
+    int Inc__a()
+    {
+        int argv = P;
+        int ret = Inc(ref argv);
+        P = argv;
+        return ret;
+    }
+
+    private int _a;
+    static int Inc__c()
+    {
+        int argv = SP;
+        int ret = Inc(ref argv);
+        SP = argv;
+        return ret;
+    }
+
+    private static int _c = Inc__c();
+
+    public static int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+}");
+    }
 }

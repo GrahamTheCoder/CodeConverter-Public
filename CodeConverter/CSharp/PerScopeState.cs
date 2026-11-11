@@ -68,6 +68,27 @@ internal class PerScopeState
         return additionalField;
     }
 
+    public bool HasHoistedNodes => _hoistedNodesPerScope.Peek().HoistedNodes.Any();
+
+    /// <summary>
+    /// For an expression that has no statement of its own to hoist into, e.g. a field initializer.
+    /// Declares the temporaries hoisted for it and writes back ByRef arguments before returning, as a statement would.
+    /// Leaves the current scope as it was, since each variable sharing an initializer evaluates it separately.
+    /// </summary>
+    public async Task<BlockSyntax> CreateReturnBlockAsync(VBasic.VisualBasicSyntaxNode vbNode, ExpressionSyntax expression, TypeSyntax resultType, SemanticModel semanticModel)
+    {
+        var currentScope = _hoistedNodesPerScope.Peek();
+        _hoistedNodesPerScope.Push(currentScope with { HoistedNodes = currentScope.HoistedNodes.ToList() });
+        try {
+            var generatedNames = new HashSet<string>();
+            var statements = WithWriteBacksBefore(expression, "ret", () => resultType, SyntaxFactory.ReturnStatement);
+            var withLocals = await CreateLocalsAsync(vbNode, statements, generatedNames, semanticModel);
+            return SyntaxFactory.Block(CreateStatements(vbNode, withLocals, generatedNames, semanticModel));
+        } finally {
+            PopScope();
+        }
+    }
+
     public IReadOnlyCollection<AdditionalDeclaration> GetDeclarations()
     {
         return _hoistedNodesPerScope.Peek().OfType<AdditionalDeclaration>().ToArray();

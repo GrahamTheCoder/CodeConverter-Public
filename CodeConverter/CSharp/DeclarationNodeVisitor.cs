@@ -553,15 +553,7 @@ internal class DeclarationNodeVisitor : VBasic.VisualBasicSyntaxVisitor<Task<CSh
                 foreach (var f in fieldDecls) yield return f;
             } else {
                 foreach (var method in CreateExtraMethodMembers()) yield return method;
-
-                if (AdditionalLocals.GetDeclarations().Any()) {
-                    foreach (var additionalDecl in CreateAdditionalLocalMembers(thisFieldModifiers, attributes, variablesDecl.Decl)) {
-                        yield return additionalDecl;
-                    }
-                } else {
-                    yield return CS.SyntaxFactory.FieldDeclaration(CS.SyntaxFactory.List(attributes), thisFieldModifiers, variablesDecl.Decl);
-                }
-
+                yield return CS.SyntaxFactory.FieldDeclaration(CS.SyntaxFactory.List(attributes), thisFieldModifiers, variablesDecl.Decl);
             }
         }
     }
@@ -584,52 +576,6 @@ internal class DeclarationNodeVisitor : VBasic.VisualBasicSyntaxVisitor<Task<CSh
         var fieldDecls = _typeContext.HandledEventsAnalysis.GetDeclarationsForFieldBackedProperty(fieldDecl,
             convertedModifiers, CS.SyntaxFactory.List(attributes));
         return fieldDecls;
-    }
-
-    private IEnumerable<MemberDeclarationSyntax> CreateAdditionalLocalMembers(SyntaxTokenList convertedModifiers, List<AttributeListSyntax> attributes, VariableDeclarationSyntax decl)
-    {
-        if (decl.Variables.Count > 1) {
-            // Currently no way to tell which _additionalLocals would apply to which initializer
-            throw new NotImplementedException(
-                "Fields with multiple declarations and initializers with ByRef parameters not currently supported");
-        }
-
-        var v = decl.Variables.First();
-        var invocations = v.Initializer.Value.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().ToArray();
-        if (invocations.Length > 1) {
-            throw new NotImplementedException(
-                "Field initializers with nested method calls not currently supported");
-        }
-
-        string newMethodName;
-        if (invocations.OnlyOrDefault() is { Expression: {} e} && e.ChildNodes().OfType<SimpleNameSyntax>().LastOrDefault() is {} sns) {
-            newMethodName = $"{sns?.Identifier.ValueText}_{v.Identifier.ValueText}";
-        } else {
-            newMethodName = "init" + v.Identifier.ValueText.UppercaseFirstLetter();
-        }
-
-        var declarationInfo = AdditionalLocals.GetDeclarations();
-
-        var localVars = declarationInfo
-            .Select(al => CommonConversions.CreateLocalVariableDeclarationAndAssignment(al.Prefix, al.Initializer))
-            .ToArray<StatementSyntax>();
-
-        // This should probably use a unique name like in MethodBodyVisitor - a collision is far less likely here
-        var newNames = declarationInfo.ToDictionary(l => l.Id, l => l.Prefix);
-        var newInitializer = PerScopeState.ReplaceNames(v.Initializer.Value, newNames);
-
-        var body = CS.SyntaxFactory.Block(localVars.Concat(CS.SyntaxFactory.ReturnStatement(newInitializer).Yield()));
-        // Method calls in initializers must be static in C# - Supporting this is #281
-        var methodDecl = ValidSyntaxFactory.CreateParameterlessMethod(newMethodName, decl.Type, body);
-        yield return methodDecl;
-
-        var newVar =
-            v.WithInitializer(CS.SyntaxFactory.EqualsValueClause(
-                CS.SyntaxFactory.InvocationExpression(ValidSyntaxFactory.IdentifierName(newMethodName))));
-        var newVarDecl =
-            CS.SyntaxFactory.VariableDeclaration(decl.Type, CS.SyntaxFactory.SingletonSeparatedList(newVar));
-
-        yield return CS.SyntaxFactory.FieldDeclaration(CS.SyntaxFactory.List(attributes), convertedModifiers, newVarDecl);
     }
 
     private IReadOnlyCollection<MemberDeclarationSyntax> CreateExtraMethodMembers()
