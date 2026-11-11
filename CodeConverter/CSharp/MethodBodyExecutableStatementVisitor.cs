@@ -507,20 +507,13 @@ internal class MethodBodyExecutableStatementVisitor : VBasic.VisualBasicSyntaxVi
     }
 
     /// <summary>
-    /// VB copies a ByRef argument back to its property straight after the call, so it happens before the statement jumps away.
-    /// Write-backs are normally emitted after the converted statement, which here would be unreachable (or, for yield, delayed until the consumer resumes).
-    /// So when there are any, evaluate the expression into a local, write back, then jump with that local.
-    /// Without write-backs the single statement is kept.
+    /// Write-backs are normally emitted after the converted statement, which after a jump would be unreachable (or, for yield, delayed until the consumer resumes).
     /// </summary>
     private SyntaxList<StatementSyntax> WithWriteBacksBeforeJump(VBSyntax.ExpressionSyntax vbExpression, ExpressionSyntax csExpression, string resultPrefix,
         Func<ExpressionSyntax, StatementSyntax> createJump)
     {
         if (csExpression is null) return SingleStatement(createJump(null));
-        var writeBacks = _perScopeState.TakeWriteBacks();
-        if (!writeBacks.Any()) return SingleStatement(createJump(csExpression));
-
-        var result = _perScopeState.Hoist(new AdditionalDeclaration(resultPrefix, csExpression, GetResultTypeSyntax(vbExpression)));
-        return SyntaxFactory.List(writeBacks.Append(createJump(result.IdentifierName)));
+        return SyntaxFactory.List(_perScopeState.WithWriteBacksBefore(csExpression, resultPrefix, () => GetResultTypeSyntax(vbExpression), createJump));
     }
 
     /// <summary>

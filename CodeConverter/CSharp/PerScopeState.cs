@@ -79,10 +79,20 @@ internal class PerScopeState
     }
 
     /// <summary>
-    /// Removes the ByRef write-backs hoisted so far in the current scope, for a statement that would otherwise skip or delay them,
-    /// e.g. a jump statement, after which a write-back would be unreachable.
+    /// VB copies a ByRef argument back to its property straight after the call, so before a statement that uses the result jumps away.
+    /// When there are write-backs, evaluate the expression into a local, write back, then use that local. Without any, the single statement is kept.
     /// </summary>
-    public IReadOnlyCollection<StatementSyntax> TakeWriteBacks()
+    public IReadOnlyCollection<StatementSyntax> WithWriteBacksBefore(ExpressionSyntax expression, string resultPrefix, Func<TypeSyntax> getResultType,
+        Func<ExpressionSyntax, StatementSyntax> createStatementUsingResult)
+    {
+        var writeBacks = TakeWriteBacks();
+        if (!writeBacks.Any()) return new[] { createStatementUsingResult(expression) };
+
+        var result = Hoist(new AdditionalDeclaration(resultPrefix, expression, getResultType()));
+        return writeBacks.Append(createStatementUsingResult(result.IdentifierName)).ToArray();
+    }
+
+    private IReadOnlyCollection<StatementSyntax> TakeWriteBacks()
     {
         var hoistedNodes = _hoistedNodesPerScope.Peek().HoistedNodes;
         var writeBacks = hoistedNodes.OfType<AdditionalAssignment>().ToArray();
