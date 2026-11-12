@@ -314,6 +314,23 @@ Public Class ByRefWriteBackPlacementTests
         End Sub
     End Class
 
+    <Fact>
+    Public Sub PartialClassFieldInitializerWritesBack()
+        Dim initialized As New PartialFieldInitializers()
+        Assert.Equal(1, initialized.A)
+        Assert.Equal(1, initialized.Counter)
+    End Sub
+
+    Partial Private Class PartialFieldInitializers
+        Public Property Counter As Integer
+        Public ReadOnly A As Integer = Increment(Counter)
+    End Class
+
+    Partial Private Class PartialFieldInitializers
+        Public Sub New()
+        End Sub
+    End Class
+
     Private Shared Function Increment(ByRef value As Integer) As Integer
         value += 1
         Return value
