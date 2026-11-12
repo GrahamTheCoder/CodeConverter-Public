@@ -995,4 +995,376 @@ internal partial class C
 }");
     }
 
+    [Fact]
+    public async Task WritesBackBeforeJumpingIssue896Async()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Imports System.Collections.Generic
+Public Class C
+    Public Property P As Integer
+
+    Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+
+    Function CreateException(ByRef v As Integer) As Exception
+        Return New Exception()
+    End Function
+
+    Function ReturnsWrittenBack() As Long
+        Return Inc(P)
+    End Function
+
+    Function ReturnsWithoutWriteBack() As Integer
+        Return Inc(New Integer)
+    End Function
+
+    Iterator Function YieldsWrittenBack() As IEnumerable(Of Integer)
+        Yield Inc(P)
+    End Function
+
+    Sub ThrowsWrittenBack()
+        Throw CreateException(P)
+    End Sub
+End Class", @"using System;
+using System.Collections.Generic;
+
+public partial class C
+{
+    public int P { get; set; }
+
+    public int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+
+    public Exception CreateException(ref int v)
+    {
+        return new Exception();
+    }
+
+    public long ReturnsWrittenBack()
+    {
+        int argv = P;
+        long ret = Inc(ref argv);
+        P = argv;
+        return ret;
+    }
+
+    public int ReturnsWithoutWriteBack()
+    {
+        int argv = new int();
+        return Inc(ref argv);
+    }
+
+    public IEnumerable<int> YieldsWrittenBack()
+    {
+        int argv = P;
+        var ret = Inc(ref argv);
+        P = argv;
+        yield return ret;
+    }
+
+    public void ThrowsWrittenBack()
+    {
+        int argv = P;
+        var ex = CreateException(ref argv);
+        P = argv;
+        throw ex;
+    }
+}");
+    }
+
+    [Fact]
+    public async Task WritesBackBeforeBlockBodyAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+
+    Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+
+    Function Arr(ByRef v As Integer) As Integer()
+        Return New Integer() {v}
+    End Function
+
+    Function D(ByRef v As Integer) As IDisposable
+        Return Nothing
+    End Function
+
+    Function IsOne(ByRef v As Integer) As Boolean
+        Return v = 1
+    End Function
+
+    Sub BlockHeaders()
+        Select Case Inc(P)
+            Case 1
+                Console.WriteLine(1)
+        End Select
+        For i = 0 To Inc(P)
+            Console.WriteLine(i)
+        Next
+        For Each item In Arr(P)
+            Console.WriteLine(item)
+        Next
+        Using dd = D(P)
+            Console.WriteLine(3)
+        End Using
+        SyncLock Arr(P)
+            Console.WriteLine(4)
+        End SyncLock
+        With Arr(P)
+            Console.WriteLine(.Length)
+        End With
+        Try
+        Catch ex As Exception When IsOne(P)
+        End Try
+    End Sub
+
+    Sub BlockHeaderWithoutWriteBack()
+        Select Case Inc(New Integer)
+            Case 1
+                Console.WriteLine(1)
+        End Select
+    End Sub
+End Class", @"using System;
+
+public partial class C
+{
+    public int P { get; set; }
+
+    public int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+
+    public int[] Arr(ref int v)
+    {
+        return new int[] { v };
+    }
+
+    public IDisposable D(ref int v)
+    {
+        return null;
+    }
+
+    public bool IsOne(ref int v)
+    {
+        return v == 1;
+    }
+
+    public void BlockHeaders()
+    {
+        int localInc() { int argv = P; var ret = Inc(ref argv); P = argv; return ret; }
+
+        switch (localInc())
+        {
+            case 1:
+                Console.WriteLine(1);
+                break;
+        }
+        int localInc1() { int argv1 = P; var ret = Inc(ref argv1); P = argv1; return ret; }
+
+        for (int i = 0, loopTo = localInc1(); i <= loopTo; i++)
+            Console.WriteLine(i);
+        int[] localArr() { int argv2 = P; var ret = Arr(ref argv2); P = argv2; return ret; }
+
+        foreach (var item in localArr())
+            Console.WriteLine(item);
+        IDisposable localD() { int argv3 = P; var ret = D(ref argv3); P = argv3; return ret; }
+
+        using (var dd = localD())
+        {
+            Console.WriteLine(3);
+        }
+        int[] localArr1() { int argv4 = P; var ret = Arr(ref argv4); P = argv4; return ret; }
+
+        lock (localArr1())
+            Console.WriteLine(4);
+        int[] localArr2() { int argv5 = P; var ret = Arr(ref argv5); P = argv5; return ret; }
+
+        {
+            var withBlock = localArr2();
+            Console.WriteLine(withBlock.Length);
+        }
+        bool localIsOne() { int argv6 = P; var ret = IsOne(ref argv6); P = argv6; return ret; }
+
+        try
+        {
+        }
+        catch (Exception ex) when (localIsOne())
+        {
+        }
+    }
+
+    public void BlockHeaderWithoutWriteBack()
+    {
+        int argv = new int();
+        switch (Inc(ref argv))
+        {
+            case 1:
+                Console.WriteLine(1);
+                break;
+        }
+    }
+}");
+    }
+
+    [Fact]
+    public async Task OmittedOptionalRefInInstanceFieldInitializerIssue1081Async()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class FieldInitializationTest
+    Private First As New Inner()
+    Private Second As New Outer(First)
+End Class
+
+Public Class Inner
+End Class
+
+Public Class Outer
+    Sub New(inner As Inner, Optional ByRef x As String = """")
+    End Sub
+End Class", @"using System.Runtime.InteropServices;
+
+public partial class FieldInitializationTest
+{
+    private Inner First = new Inner();
+
+    public FieldInitializationTest()
+    {
+        Second = initSecond();
+    }
+    Outer initSecond()
+    {
+        string argx = """";
+        return new Outer(First, x: ref argx);
+    }
+
+    private Outer Second;
+}
+
+public partial class Inner
+{
+}
+
+public partial class Outer
+{
+    public Outer(Inner inner, [Optional, DefaultParameterValue("""")] ref string x)
+    {
+    }
+}");
+    }
+
+    [Fact]
+    public async Task FieldInitializersWriteBackAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+    Private Shared Property SP As Integer
+    Private _a As Integer = Inc(P)
+    Private Shared _c As Integer = Inc(SP)
+
+    Shared Function Inc(ByRef v As Integer) As Integer
+        v += 1
+        Return v
+    End Function
+End Class", @"
+public partial class C
+{
+    public int P { get; set; }
+    private static int SP { get; set; }
+
+    public C()
+    {
+        _a = Inc__a();
+    }
+    int Inc__a()
+    {
+        int argv = P;
+        int ret = Inc(ref argv);
+        P = argv;
+        return ret;
+    }
+
+    private int _a;
+    static int Inc__c()
+    {
+        int argv = SP;
+        int ret = Inc(ref argv);
+        SP = argv;
+        return ret;
+    }
+
+    private static int _c = Inc__c();
+
+    public static int Inc(ref int v)
+    {
+        v += 1;
+        return v;
+    }
+}");
+    }
+
+    [Fact]
+    public async Task FieldInitializerMethodNamesAvoidExistingMembersAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+    Private w As Integer = Inc(P) + 1
+    Private v As Integer = Inc(P)
+    Private Inc_v As Integer
+
+    Function initW() As Integer
+        Return 0
+    End Function
+
+    Shared Function Inc(ByRef x As Integer) As Integer
+        x += 1
+        Return x
+    End Function
+End Class", @"
+public partial class C
+{
+    public int P { get; set; }
+
+    public C()
+    {
+        w = initW1();
+        v = Inc_v1();
+    }
+    int initW1()
+    {
+        int localInc() { int argx = P; var ret = Inc(ref argx); P = argx; return ret; }
+
+        return localInc() + 1;
+    }
+
+    private int w;
+    int Inc_v1()
+    {
+        int argx = P;
+        int ret = Inc(ref argx);
+        P = argx;
+        return ret;
+    }
+
+    private int v;
+    private int Inc_v;
+
+    public int initW()
+    {
+        return 0;
+    }
+
+    public static int Inc(ref int x)
+    {
+        x += 1;
+        return x;
+    }
+}");
+    }
 }
