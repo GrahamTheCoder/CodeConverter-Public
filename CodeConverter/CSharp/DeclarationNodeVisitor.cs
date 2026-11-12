@@ -548,11 +548,11 @@ internal class DeclarationNodeVisitor : VBasic.VisualBasicSyntaxVisitor<Task<CSh
                 }
             }
 
+            foreach (var method in CreateExtraMethodMembers()) yield return method;
             if (isWithEvents) {
                 var fieldDecls = CreateWithEventsMembers(thisFieldModifiers, attributes, variablesDecl.Decl);
                 foreach (var f in fieldDecls) yield return f;
             } else {
-                foreach (var method in CreateExtraMethodMembers()) yield return method;
                 yield return CS.SyntaxFactory.FieldDeclaration(CS.SyntaxFactory.List(attributes), thisFieldModifiers, variablesDecl.Decl);
             }
         }
@@ -580,7 +580,7 @@ internal class DeclarationNodeVisitor : VBasic.VisualBasicSyntaxVisitor<Task<CSh
 
     private IReadOnlyCollection<MemberDeclarationSyntax> CreateExtraMethodMembers()
     {
-        var methodsInfos = AdditionalLocals.GetParameterlessFunctions();
+        var methodsInfos = AdditionalLocals.TakeParameterlessFunctions();
 
         // In theory this should use a unique name like in MethodBodyVisitor
         // Unfortunately we can't change the name for these since the file containing the constructor of a partial class tries to call the method with exactly this name.

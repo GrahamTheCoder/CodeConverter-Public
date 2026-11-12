@@ -134,6 +134,16 @@ internal class PerScopeState
         return _hoistedNodesPerScope.Peek().OfType<HoistedFunction>().ToArray();
     }
 
+    /// <summary>
+    /// For a scope whose functions are emitted as they're found, e.g. one per variable of a field declaration, so each is emitted once.
+    /// </summary>
+    public IReadOnlyCollection<HoistedFunction> TakeParameterlessFunctions()
+    {
+        var functions = GetParameterlessFunctions();
+        _hoistedNodesPerScope.Peek().HoistedNodes.RemoveAll(n => n is HoistedFunction);
+        return functions;
+    }
+
     public IReadOnlyCollection<HoistedFieldFromVbStaticVariable> GetFields()
     {
         return _hoistedNodesPerScope.Peek().OfType<HoistedFieldFromVbStaticVariable>().ToArray();

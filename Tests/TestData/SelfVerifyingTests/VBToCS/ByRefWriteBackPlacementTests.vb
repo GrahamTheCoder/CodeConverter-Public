@@ -331,6 +331,43 @@ Public Class ByRefWriteBackPlacementTests
         End Sub
     End Class
 
+    <Fact>
+    Public Sub SeveralDeclaratorsInOneFieldDeclarationEachWriteBack()
+        Dim initialized As New SeveralDeclarators
+        Assert.Equal(1, initialized.A)
+        Assert.Equal(2, initialized.B)
+        Assert.Equal(4, initialized.Arr.Length)
+        Assert.Equal(3, initialized.Counter)
+    End Sub
+
+    Private Class SeveralDeclarators
+        Public Property Counter As Integer
+        Public ReadOnly A As Integer = Increment(Counter), B As Integer = Increment(Counter)
+        Public Arr(Increment(Counter)), Other As Integer
+    End Class
+
+    <Fact>
+    Public Sub WithEventsFieldInitializerWritesBack()
+        Dim initialized As New WithEventsFieldInitializer
+        Assert.Equal(1, initialized.Counter)
+        Assert.Equal(1, initialized.Source.Received)
+    End Sub
+
+    Private Class WithEventsFieldInitializer
+        Public Property Counter As Integer
+        Public WithEvents Source As New EventSource(Counter)
+    End Class
+
+    Private Class EventSource
+        Public Event Changed()
+        Public ReadOnly Received As Integer
+
+        Sub New(ByRef value As Integer)
+            value += 1
+            Received = value
+        End Sub
+    End Class
+
     Private Shared Function Increment(ByRef value As Integer) As Integer
         value += 1
         Return value
