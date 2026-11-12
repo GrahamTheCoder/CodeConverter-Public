@@ -29,4 +29,8 @@ Known gaps:
 * Arguments of `New` (object creation) in a block header still write back after the block.
 * A non-constant `For ... Step` is re-evaluated each iteration (not ByRef-specific).
 * VB copies back a call's arguments in reverse order (`copyBackArray.ReverseContents()` in `LocalRewriter_Call.vb`); the converter writes back in argument order. Only observable when two arguments write back to aliasing targets, e.g. `Two(p.Value, p.Value)`. A fix needs per-call grouping in `ArgumentConverter`, since nested calls write back before the outer call.
+* `Dim a = Inc(P), b = Inc(P)` writes back after all declarators, so `b` reads a stale `P`.
+* A lambda parameter inside a ByRef argument (`Function(x) Inc(x.P)`) hoists the local function outside the lambda, where `x` isn't in scope (CS0103).
+* An auto-property initializer (`Public Property X As Integer = Inc(P)`) leaves a `ph…` placeholder (CS0103): it doesn't go through the field initializer path.
+* Partial-class instance initializers run in part order rather than declaration order.
 * A `ReadOnly` auto-property is assignable in its type's constructor and initializers, so VB writes it back there, but `GetRefConversionForExpression` treats every read-only property as not writable. A fix also needs the C# write-back target to be assignable from the field initializer method.
