@@ -580,19 +580,9 @@ internal class DeclarationNodeVisitor : VBasic.VisualBasicSyntaxVisitor<Task<CSh
 
     private IReadOnlyCollection<MemberDeclarationSyntax> CreateExtraMethodMembers()
     {
-        var methodsInfos = AdditionalLocals.TakeParameterlessFunctions();
-
-        // In theory this should use a unique name like in MethodBodyVisitor
-        // Unfortunately we can't change the name for these since the file containing the constructor of a partial class tries to call the method with exactly this name.
-        // See GetInitialValueFunctionName
-        var newMethodNames = methodsInfos.ToDictionary(l => l.Id, l => l.Prefix);
-        for (int i = 0; i < _typeContext.Initializers.AdditionalInstanceInitializers.Count; i++) {
-            var (a, b, initializer, _) = _typeContext.Initializers.AdditionalInstanceInitializers[i];
-            _typeContext.Initializers.AdditionalInstanceInitializers[i] = new Assignment(a, b, PerScopeState.ReplaceNames(initializer, newMethodNames));
-        }
-
-        return methodsInfos
-            .Select(al => al.AsInstanceMethod(newMethodNames[al.Id]))
+        // Callers reference these by their final name, so it's the prefix rather than a placeholder
+        return AdditionalLocals.TakeParameterlessFunctions()
+            .Select(al => al.AsInstanceMethod(al.Prefix))
             .ToArray();
     }
 
