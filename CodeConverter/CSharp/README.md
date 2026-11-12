@@ -25,4 +25,8 @@ Sources: [passing arguments by value and by reference](https://learn.microsoft.c
 | Followed by other evaluation, or in a condition or block header (`If`, `ElseIf`, loops, `Select Case`, `Case`, `For`, `For Each`, `Using`, `SyncLock`, `With`, `Catch When`) | a local function that declares, calls and writes back, called in place | `NameExpressionNodeVisitor.RequiresLocalFunction`, `HoistAndCallLocalFunctionAsync` |
 | A field initializer | a method that declares, writes back and returns, called from the field (static) or the constructor (instance) | `CommonConversions.WithHoistedNodesInMethodAsync`, `PerScopeState.CreateReturnBlockAsync` |
 
-Known gaps: arguments of `New` (object creation) in a block header still write back after the block, and a non-constant `For ... Step` is re-evaluated each iteration.
+Known gaps:
+* Arguments of `New` (object creation) in a block header still write back after the block.
+* A non-constant `For ... Step` is re-evaluated each iteration (not ByRef-specific).
+* VB copies back a call's arguments in reverse order (`copyBackArray.ReverseContents()` in `LocalRewriter_Call.vb`); the converter writes back in argument order. Only observable when two arguments write back to aliasing targets, e.g. `Two(p.Value, p.Value)`. A fix needs per-call grouping in `ArgumentConverter`, since nested calls write back before the outer call.
+* A `ReadOnly` auto-property is assignable in its type's constructor and initializers, so VB writes it back there, but `GetRefConversionForExpression` treats every read-only property as not writable. A fix also needs the C# write-back target to be assignable from the field initializer method.
