@@ -203,12 +203,10 @@ internal class CommonConversions
 
     private static string GetInitializerMethodName(ExpressionSyntax initializer, string fieldName)
     {
-        var invokedName = initializer is CSSyntax.InvocationExpressionSyntax { Expression: var invoked } ? invoked switch {
-            CSSyntax.SimpleNameSyntax name => name,
-            CSSyntax.MemberAccessExpressionSyntax memberAccess => memberAccess.Name,
-            _ => null
-        } : null;
-        return invokedName is null ? "init" + fieldName.UppercaseFirstLetter() : $"{invokedName.Identifier.ValueText}_{fieldName}";
+        // Names are qualified by the time they're converted, e.g. Me.Foo(...)
+        return initializer is CSSyntax.InvocationExpressionSyntax { Expression: CSSyntax.MemberAccessExpressionSyntax { Name: var invokedName } }
+            ? $"{invokedName.Identifier.ValueText}_{fieldName}"
+            : "init" + fieldName.UppercaseFirstLetter();
     }
 
     /// <remarks>
