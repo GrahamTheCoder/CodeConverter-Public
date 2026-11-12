@@ -196,7 +196,8 @@ internal class CommonConversions
         if (!_typeContext.PerScopeState.HasHoistedNodes) return initializer;
 
         var body = await _typeContext.PerScopeState.CreateReturnBlockAsync(vbName, initializer, type, SemanticModel);
-        var methodName = GetInitializerMethodName(initializer, ConvertIdentifier(vbName.Identifier).ValueText);
+        var baseMethodName = GetInitializerMethodName(initializer, ConvertIdentifier(vbName.Identifier).ValueText);
+        var methodName = NameGenerator.CS.GetUniqueVariableNameInScope(SemanticModel, new HashSet<string>(), vbName, baseMethodName);
         _typeContext.PerScopeState.HoistToParent(new HoistedFunction(methodName, type, body, SyntaxFactory.ParameterList(), isStatic));
         return SyntaxFactory.InvocationExpression(ValidSyntaxFactory.IdentifierName(methodName));
     }

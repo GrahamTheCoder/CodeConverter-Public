@@ -1308,4 +1308,63 @@ public partial class C
     }
 }");
     }
+
+    [Fact]
+    public async Task FieldInitializerMethodNamesAvoidExistingMembersAsync()
+    {
+        await TestConversionVisualBasicToCSharpAsync(@"Public Class C
+    Public Property P As Integer
+    Private w As Integer = Inc(P) + 1
+    Private v As Integer = Inc(P)
+    Private Inc_v As Integer
+
+    Function initW() As Integer
+        Return 0
+    End Function
+
+    Shared Function Inc(ByRef x As Integer) As Integer
+        x += 1
+        Return x
+    End Function
+End Class", @"
+public partial class C
+{
+    public int P { get; set; }
+
+    public C()
+    {
+        w = initW1();
+        v = Inc_v1();
+    }
+    int initW1()
+    {
+        int localInc() { int argx = P; var ret = Inc(ref argx); P = argx; return ret; }
+
+        return localInc() + 1;
+    }
+
+    private int w;
+    int Inc_v1()
+    {
+        int argx = P;
+        int ret = Inc(ref argx);
+        P = argx;
+        return ret;
+    }
+
+    private int v;
+    private int Inc_v;
+
+    public int initW()
+    {
+        return 0;
+    }
+
+    public static int Inc(ref int x)
+    {
+        x += 1;
+        return x;
+    }
+}");
+    }
 }
